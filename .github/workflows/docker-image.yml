@@ -28,6 +28,18 @@ jobs:
         inlineScript: |
             az account show
             az storage -h
+            
+    - name: Login to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${ secrets.REGISTRY_NAME }.azurecr.io
+        username: ${ secrets.ACR_USERNAME }
+        password: ${ secrets.ACR_PASSWORD }
+        
+    - run: |
+       az acr login --name PoojaDevOpsContainerRegistry
+       docker build . -t poojadevopscontainerregistry.azurecr.io/poojadevopsspringbootimage:${{ github.sha }}
+       docker push poojadevopscontainerregistry.azurecr.io/poojadevopsspringbootimage:${{ github.sha }}
         
       
   
