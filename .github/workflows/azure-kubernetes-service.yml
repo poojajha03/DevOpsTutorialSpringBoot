@@ -1,0 +1,85 @@
+name: Build Docker image and push to ACR registry
+
+on:
+  #push:
+   # branches: [ "master" ]
+  #pull_request:
+    #branches: [ "master" ]
+    workflow_dispatch:
+
+# Environment variables available to all jobs and steps in this workflow
+env:
+  REGISTRY_NAME: "PoojaDevOpsContainerRegistry"
+  CLUSTER_NAME: "PoojaDevOpsCluster"
+  CLUSTER_RESOURCE_GROUP: "PoojaDevOpsTutorials"
+  NAMESPACE: "default"
+  SECRET: "mysecret"
+  APP_NAME: "PoojaDevOpsApplication"
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code 
+      uses: actions/checkout@v3
+    - name: Log in with Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Azure CLI script
+      uses: azure/CLI@v1
+      with:
+        azcliversion: 2.0.72
+        inlineScript: |
+            az account show
+            az storage -h
+            
+    - name: Login to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${ secrets.REGISTRY_NAME }.azurecr.io
+        username: ${ secrets.ACR_USERNAME }
+        password: ${ secrets.ACR_PASSWORD }
+        
+    - run: |
+       az acr login --name PoojaDevOpsContainerRegistry
+        docker build . -t ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+        docker push ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+       
+   # Set the target Azure Kubernetes Service (AKS) cluster. 
+    - uses: azure/aks-set-context@v1
+      with:
+        creds: '${{ secrets.AZURE_CREDENTIALS }}'
+        cluster-name: ${{ env.CLUSTER_NAME }}
+        resource-group: ${{ env.CLUSTER_RESOURCE_GROUP }}
+        
+  # Create namespace if doesn't exist
+    - run: |
+       kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o json | kubectl apply -f -
+       
+ # Create image pull secret for ACR, associating container registery with cluster so kubernetes can pick the image
+    - uses: azure/k8s-create-secret@v1
+      with:
+        container-registry-url: ${{ env.REGISTRY_NAME }}.azurecr.io
+        container-registry-username: ${{ secrets.ACR_USERNAME }}
+        container-registry-password: ${{ secrets.ACR_PASSWORD }}
+        secret-name: ${{ env.SECRET }}
+        namespace: ${{ env.NAMESPACE }}
+        arguments: --force true
+        
+  # Deploy app to AKS, takeing the yml file to deploy and deploying into the pods
+    - uses: azure/k8s-deploy@v1
+      with:
+        manifests: |
+          ./deployment.yml
+        image: |
+          ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+        imagepullsecrets: |
+          ${{ env.SECRET }}
+        namespace: ${{ env.NAMESPACE }}
+       
+       
+       
