@@ -14,7 +14,7 @@ env:
   CLUSTER_RESOURCE_GROUP: "PoojaDevOpsTutorials"
   NAMESPACE: "default"
   SECRET: "mysecret"
-  APP_NAME: "PoojaDevOpsApplication"
+  APP_NAME: "poojadevopsapplication"
 
 jobs:
 
